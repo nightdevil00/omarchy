@@ -114,7 +114,7 @@ Rectangle {
     Text {
       anchors.fill: parent
       anchors.margins: 5
-      verticalAlignment: Text.AlignVCentered
+      verticalAlignment: Text.AlignVCenter
       color: "#c0caf5"
       font.family: "JetBrainsMono Nerd Font"
       font.pixelSize: 14
@@ -203,12 +203,7 @@ Rectangle {
           selectedTextColor: "transparent"
           activeFocusOnPress: true
           cursorVisible: true
-          cursorDelegate: Rectangle {
-            width: 2
-            height: 22
-            color: "#7aa2f7"
-            visible: password.activeFocus
-          }
+          cursorDelegate: Item { }
           focus: true
 
           onTextChanged: root.loginFailed = false
@@ -223,6 +218,9 @@ Rectangle {
               } else {
                 focusNext()
               }
+              event.accepted = true
+            } else if (event.key === Qt.Key_Backtab) {
+              focusPrev()
               event.accepted = true
             } else if (event.key === Qt.Key_Down) {
               userCombo.forceActiveFocus()
@@ -274,8 +272,8 @@ Rectangle {
                 focusNext()
               }
               event.accepted = true
-            } else if (event.key === Qt.Key_Space) {
-              userCombo.toggle()
+            } else if (event.key === Qt.Key_Backtab) {
+              focusPrev()
               event.accepted = true
             } else if (event.key === Qt.Key_Down) {
               cycleIndex(userCombo, userPickModel.count, 1)
@@ -320,8 +318,8 @@ Rectangle {
                 focusNext()
               }
               event.accepted = true
-            } else if (event.key === Qt.Key_Space) {
-              sessionCombo.toggle()
+            } else if (event.key === Qt.Key_Backtab) {
+              focusPrev()
               event.accepted = true
             } else if (event.key === Qt.Key_Down) {
               cycleIndex(sessionCombo, sessionModel.count, 1)
@@ -332,7 +330,7 @@ Rectangle {
             }
           }
           Keys.onReleased: {
-            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
+            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Renter) {
               doLogin()
               event.accepted = true
             }
