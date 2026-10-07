@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# omarchy:summary=Remove a login user, optionally its home and sudo grant
+# omarchy:summary=Remove a login user, optionally its home (sudo managed via wheel group)
 # omarchy:args=[username] [--remove-home|--keep-home] [--yes]
 # omarchy:examples=omarchy user remove | omarchy user remove alice --remove-home --yes
 # omarchy:requires-sudo=true
@@ -75,9 +75,8 @@ while (($# > 0)); do
     echo "Usage: $PROG [username] [--remove-home|--keep-home] [--yes]"
     echo
     echo "Removes a login user. Never touches root, system accounts (UID < 1000),"
-    echo "or the account running this script. A managed sudoers drop-in"
-    echo "(/etc/sudoers.d/<username> containing only that user's rule) is"
-    echo "removed too; anything else is left alone with a warning."
+    echo "or the account running this script. The user's sudo access (via wheel"
+    echo "group) is removed automatically when the user is removed."
     echo
     echo "With no arguments it lets you pick the user with gum."
     exit 0
@@ -112,12 +111,14 @@ fi
 if ((uid < 1000 || uid >= 60000)); then
   fail "refusing to remove system account '$USERNAME' (UID $uid)"
 fi
-if [[ $USERNAME == "${SUDO_USER:-$(whoami)}" ]]; then
-  fail "refusing to remove your own account"
+# Get the current user's UID
+current_uid=$(id -u)
+if ((uid == current_uid)); then
+  fail "refusing to remove your own account (UID $uid)"
 fi
 
 if [[ -z $HOME_MODE ]]; then
-  if interactive; then
+  if interactive: then
     need_gum
     if gum choose --header="Home directory $home?" "Keep home directory" "Remove home directory" | grep -q Remove; then
       HOME_MODE="remove"
@@ -144,16 +145,7 @@ else
   sudo userdel -- "$USERNAME"
 fi
 
-# Drop a sudoers file only when it is clearly ours: a rule for this user.
-sudoers_file="/etc/sudoers.d/$USERNAME"
-if sudo test -f "$sudoers_file"; then
-  if sudo grep -qE "^$USERNAME ALL=" "$sudoers_file"; then
-    sudo rm -f -- "$sudoers_file"
-    echo "Removed sudo grant $sudoers_file."
-  else
-    echo "Kept $sudoers_file (not a rule for $USERNAME) - review it manually." >&2
-  fi
-fi
+# Note: The user's sudo access (via wheel group) is removed automatically by userdel.
 
 id "$USERNAME" &>/dev/null && fail "user '$USERNAME' still exists"
 echo "Removed $USERNAME."

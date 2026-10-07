@@ -3,6 +3,7 @@
 # omarchy:summary=Change a user's supplementary groups (pick, add, remove, or set)
 # omarchy:args=[username] [--add g1,g2] [--remove g1,g2] [--set g1,g2] [--yes]
 # omarchy:examples=omarchy user groups | omarchy user groups alice --add wheel --yes
+# omarchy:requires-sudo=true
 
 set -euo pipefail
 
@@ -98,6 +99,7 @@ while (($# > 0)); do
     if [[ -n $ADD_ARG || -n $SET_ARG ]]; then
       fail "combine --add/--remove, or use --set alone"
     fi
+    SET_ARG=""
     ADD_ARG="$2"
     shift 2
     ;;
@@ -108,6 +110,7 @@ while (($# > 0)); do
     if [[ -n $REMOVE_ARG || -n $SET_ARG ]]; then
       fail "combine --add/--remove, or use --set alone"
     fi
+    SET_ARG=""
     REMOVE_ARG="$2"
     shift 2
     ;;
@@ -119,6 +122,8 @@ while (($# > 0)); do
       fail "combine --add/--remove, or use --set alone"
     fi
     SET_ARG="$2"
+    ADD_ARG=""
+    REMOVE_ARG=""
     shift 2
     ;;
   --yes | -y)
@@ -201,6 +206,52 @@ else
     selected=$(printf '%s' "$options" | gum choose --no-limit --header="Groups for $USERNAME? (space to toggle)") || fail "cancelled"
   fi
   final=$(printf '%s' "$selected" | tr '\n' ',' | sed 's/,$//')
+fi
+
+# Get the real user (the invoker) UID and username
+real_user_uid=$(id -u ${SUDO_USER:-$USER})
+real_user_name=${SUDO_USER:-$USER}
+
+# Get the target user's UID
+target_user_uid=$(id -u "$USERNAME")
+
+# Check if we are trying to remove wheel from the real user
+if [[ $target_user_uid -eq $real_user_uid ]] && [[ "$final" != *wheel* ]]; then
+  fail "refusing to remove wheel from your own account"
+fi
+
+# Check if we are about to remove the last login user from the wheel group
+# We only care if we are removing wheel from a user who is currently in the wheel group.
+# Determine if the target user is currently in the wheel group
+current_has_wheel=false
+if [[ "$current" == *wheel* ]]; then
+  current_has_wheel=true
+fi
+# Determine if the final groups include wheel
+final_has_wheel=false
+if [[ "$final" == *wheel* ]]; then
+  final_has_wheel=true
+fi
+
+# If we are removing wheel from the target user (i.e., they currently have it and after the change they don't)
+if [[ $current_has_wheel == true && $final_has_wheel == false ]]; then
+  # Count the current number of login users in the wheel group
+  wheel_users_string=$(getent group wheel | cut -d: -f4)
+  if [[ -n $wheel_users_string ]]; then
+    IFS=',' read -ra wheel_users <<<"$wheel_users_string"
+    current_login_count=0
+    for u in "${wheel_users[@]}"; do
+      uid=$(id -u "$u" 2>/dev/null) || continue
+      if ((uid >= 1000 && uid < 60000)); then
+        ((current_login_count++))
+      fi
+    done
+    # If the target user is a login user (which they are, because we checked UID range earlier) and they are in the wheel group, then they are counted in current_login_count.
+    # After removing them, the count would be current_login_count - 1.
+    if ((current_login_count <= 1)); then
+      fail "refusing to remove wheel: would leave the wheel group with no login users"
+    fi
+  fi
 fi
 
 echo

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# omarchy:summary=Set a user's sudo level: password sudo or none
+# omarchy:summary=Set a user's sudo level: password sudo or none (via wheel group)
 # omarchy:args=[username] [--level password|none] [--yes]
 # omarchy:examples=omarchy user privileges | omarchy user privileges alice --level password --yes
 # omarchy:requires-sudo=true
@@ -66,11 +66,8 @@ while (($# > 0)); do
   -h | --help)
     echo "Usage: $PROG [username] [--level password|none] [--yes]"
     echo
-    echo "Sets a user's sudo level through a validated /etc/sudoers.d/<username>"
-    echo "drop-in: password sudo, or no sudo grant at all. Like the rest of"
-    echo "Omarchy, sudo always asks for a password."
-    echo "'none' removes the drop-in only when it is clearly ours (a rule for"
-    echo "that user); anything else is left alone with a warning."
+    echo "Sets a user's sudo level via the wheel group: password sudo (add to wheel) or no sudo (remove from wheel)."
+    echo "'none' removes the user from the wheel group only when they are a member; anything else is left alone with a warning."
     echo
     echo "With no arguments it walks you through each step with gum."
     exit 0
@@ -113,33 +110,20 @@ if [[ -z $LEVEL ]]; then
   fi
 fi
 
-sudoers_file="/etc/sudoers.d/$USERNAME"
-
-if [[ $LEVEL == "none" ]]; then
-  if sudo test -f "$sudoers_file"; then
-    if sudo grep -qE "^$USERNAME ALL=" "$sudoers_file"; then
-      echo "About to remove sudo grant $sudoers_file."
-      confirm "Remove sudo for $USERNAME?" || fail "aborted"
-      sudo rm -f -- "$sudoers_file"
-      echo "Sudo removed for $USERNAME."
-    else
-      fail "$sudoers_file is not a rule for $USERNAME - review it manually"
-    fi
-  else
-    echo "$USERNAME has no sudoers drop-in; nothing to remove."
-  fi
-  exit 0
-fi
-
-sudoers_line="$USERNAME ALL=(ALL) ALL"
-
 echo
 echo "About to set:"
 echo "  user:  $USERNAME"
 echo "  level: $LEVEL"
 confirm "Grant $LEVEL sudo to $USERNAME?" || fail "aborted"
 
-printf '%s\n' "$sudoers_line" | sudo tee "$sudoers_file" >/dev/null
-sudo chmod 440 -- "$sudoers_file"
-sudo visudo -c
-echo "Sudo ($LEVEL) granted to $USERNAME via $sudoers_file."
+if [[ $LEVEL == "password" ]]; then
+  # Add user to wheel group for sudo
+  sudo gpasswd -a "$USERNAME" wheel
+  echo "Sudo (password) granted to $USERNAME via wheel group."
+else
+  # Remove user from wheel group
+  sudo gpasswd -d "$USERNAME" wheel
+  echo "Sudo removed for $USERNAME (removed from wheel group)."
+fi
+
+echo "Change takes effect on next login."
