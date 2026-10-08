@@ -203,9 +203,9 @@ else
   selected=""
   if [[ -n $current ]]; then
     want="--selected=$(printf '%s' "$current" | tr ' ' ',')"
-    selected=$(printf '%s' "$options" | gum choose --no-limit "$want" --header="Groups for $USERNAME? (space to toggle)") || fail "cancelled"
+    selected=$(printf '%s' "$options" | gum choose --no-limit "$want" --header="Groups for $USERNAME? (x to toggle)") || fail "cancelled"
   else
-    selected=$(printf '%s' "$options" | gum choose --no-limit --header="Groups for $USERNAME? (space to toggle)") || fail "cancelled"
+    selected=$(printf '%s' "$options" | gum choose --no-limit --header="Groups for $USERNAME? (x to toggle)") || fail "cancelled"
   fi
   final=$(printf '%s' "$selected" | tr '\n' ',' | sed 's/,$//')
 fi

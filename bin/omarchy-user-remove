@@ -139,11 +139,16 @@ confirm "Remove user $USERNAME? This cannot be undone." || fail "aborted"
 # Log the user out first so userdel doesn't fail on a live session.
 sudo loginctl terminate-user "$USERNAME" >/dev/null 2>&1 || true
 
+userdel_flags=()
 if [[ $HOME_MODE == "remove" ]]; then
-  sudo userdel -r -- "$USERNAME"
-else
-  sudo userdel -- "$USERNAME"
+  userdel_flags=(-r)
 fi
+if ! userdel_output=$(sudo userdel "${userdel_flags[@]}" -- "$USERNAME" 2>&1); then
+  printf '%s\n' "$userdel_output" >&2
+  fail "could not remove $USERNAME"
+fi
+# userdel warns when the mail spool was never created. That is not a failure.
+printf '%s\n' "$userdel_output" | grep -vF 'mail spool' | awk NF >&2 || true
 
 # Note: The user's sudo access (via wheel group) is removed automatically by userdel.
 

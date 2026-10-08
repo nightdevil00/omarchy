@@ -125,7 +125,7 @@ id "$USERNAME" &>/dev/null && fail "user '$USERNAME' already exists (see omarchy
 if [[ -z $GROUPS_ARG ]]; then
   if interactive; then
     need_gum
-    GROUPS_ARG=$(existing_groups | gum choose --no-limit --header="Groups for $USERNAME? (space to toggle)") || fail "cancelled"
+    GROUPS_ARG=$(existing_groups | gum choose --no-limit --header="Groups for $USERNAME? (x to toggle)") || fail "cancelled"
     GROUPS_ARG=$(printf '%s' "$GROUPS_ARG" | tr '\n' ',' | sed 's/,$//')
   else
     GROUPS_ARG=""
