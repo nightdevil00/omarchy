@@ -7,6 +7,8 @@
 
 set -euo pipefail
 
+source "${BASH_SOURCE[0]%/*}/omarchy-user-functions" || exit 1
+
 PROG="omarchy user remove"
 ASSUME_YES=0
 USERNAME=""
@@ -43,7 +45,7 @@ confirm() {
 }
 
 need_gum() {
-  command -v gum >/dev/null 2>&1 || fail "gum is required for the interactive menu"
+  omarchy-cmd-present gum || fail "gum is required for the interactive menu"
 }
 
 # Login users: real accounts (UID 1000..59999), one per line.
@@ -111,14 +113,12 @@ fi
 if ((uid < 1000 || uid >= 60000)); then
   fail "refusing to remove system account '$USERNAME' (UID $uid)"
 fi
-# Get the current user's UID
-current_uid=$(id -u)
-if ((uid == current_uid)); then
+if ((uid == $(caller_uid))); then
   fail "refusing to remove your own account (UID $uid)"
 fi
 
 if [[ -z $HOME_MODE ]]; then
-  if interactive: then
+  if interactive; then
     need_gum
     if gum choose --header="Home directory $home?" "Keep home directory" "Remove home directory" | grep -q Remove; then
       HOME_MODE="remove"

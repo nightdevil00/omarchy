@@ -7,6 +7,8 @@
 
 set -euo pipefail
 
+source "${BASH_SOURCE[0]%/*}/omarchy-user-functions" || exit 1
+
 PROG="omarchy user privileges"
 ASSUME_YES=0
 USERNAME=""
@@ -43,7 +45,7 @@ confirm() {
 }
 
 need_gum() {
-  command -v gum >/dev/null 2>&1 || fail "gum is required for the interactive menu"
+  omarchy-cmd-present gum || fail "gum is required for the interactive menu"
 }
 
 login_users() {
@@ -110,6 +112,10 @@ if [[ -z $LEVEL ]]; then
   fi
 fi
 
+if [[ $LEVEL == "none" ]] && in_group "$USERNAME" wheel; then
+  guard_wheel_removal "$USERNAME"
+fi
+
 echo
 echo "About to set:"
 echo "  user:  $USERNAME"
@@ -120,10 +126,12 @@ if [[ $LEVEL == "password" ]]; then
   # Add user to wheel group for sudo
   sudo gpasswd -a "$USERNAME" wheel
   echo "Sudo (password) granted to $USERNAME via wheel group."
-else
+elif in_group "$USERNAME" wheel; then
   # Remove user from wheel group
   sudo gpasswd -d "$USERNAME" wheel
   echo "Sudo removed for $USERNAME (removed from wheel group)."
+else
+  echo "$USERNAME is not in wheel; no sudo to remove."
 fi
 
 echo "Change takes effect on next login."

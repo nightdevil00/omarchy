@@ -9,6 +9,7 @@ set -euo pipefail
 
 PROG="omarchy user add"
 ASSUME_YES=0
+SKIP_PASSWORD=0
 USERNAME=""
 GROUPS_ARG=""
 
@@ -43,7 +44,7 @@ confirm() {
 }
 
 need_gum() {
-  command -v gum >/dev/null 2>&1 || fail "gum is required for the interactive menu"
+  omarchy-cmd-present gum || fail "gum is required for the interactive menu"
 }
 
 # Groups worth offering on an Omarchy desktop. wheel is the admin group;
@@ -71,16 +72,20 @@ while (($# > 0)); do
     GROUPS_ARG="$2"
     shift 2
     ;;
+  --skip-password)
+    SKIP_PASSWORD=1
+    shift
+    ;;
   --yes | -y)
     ASSUME_YES=1
     shift
     ;;
   -h | --help)
-    echo "Usage: $PROG [username] [--groups g1,g2] [--yes]"
+    echo "Usage: $PROG [username] [--groups g1,g2] [--skip-password] [--yes]"
     echo
     echo "Creates a login user, puts it in the given groups (default: none),"
-    echo "sets its password via passwd. Sudo is managed separately via"
-    echo "'omarchy user privileges'."
+    echo "sets its password via passwd (or skip it with --skip-password). Sudo is"
+    echo "managed separately via 'omarchy user privileges'."
     echo
     echo "With no arguments it walks you through each step with gum."
     exit 0
@@ -126,13 +131,15 @@ if [[ -z $GROUPS_ARG ]]; then
     GROUPS_ARG=""
   fi
 fi
-[[ -n $GROUPS_ARG ]] || fail "no groups selected"
-IFS=',' read -ra GROUP_ARR <<<"$GROUPS_ARG"
-for g in "${GROUP_ARR[@]}"; do
-  [[ -n $g ]] || fail "empty group name in '$GROUPS_ARG'"
-  getent group "$g" >/dev/null || fail "unknown group: $g"
-done
-GROUPS_CSV=$(IFS=,; printf '%s' "${GROUP_ARR[*]}")
+GROUPS_CSV=""
+if [[ -n $GROUPS_ARG ]]; then
+  IFS=',' read -ra GROUP_ARR <<<"$GROUPS_ARG"
+  for g in "${GROUP_ARR[@]}"; do
+    [[ -n $g ]] || fail "empty group name in '$GROUPS_ARG'"
+    getent group "$g" >/dev/null || fail "unknown group: $g"
+  done
+  GROUPS_CSV=$(IFS=,; printf '%s' "${GROUP_ARR[*]}")
+fi
 
 if ((SKIP_PASSWORD == 0)) && ! interactive; then
   fail "setting a password needs a terminal; pass --skip-password or run interactively"
@@ -151,7 +158,9 @@ echo "  groups: ${GROUPS_CSV:-<none>}"
 confirm "Create user $USERNAME?" || fail "aborted"
 
 sudo useradd -m -s "$USER_SHELL" "$USERNAME"
-sudo usermod -aG "$GROUPS_CSV" "$USERNAME"
+if [[ -n $GROUPS_CSV ]]; then
+  sudo usermod -aG "$GROUPS_CSV" "$USERNAME"
+fi
 
 if ((SKIP_PASSWORD)); then
   echo "Skipped password (--skip-password). The greeter needs one: run 'sudo passwd $USERNAME'."

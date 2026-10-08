@@ -7,6 +7,8 @@
 
 set -euo pipefail
 
+source "${BASH_SOURCE[0]%/*}/omarchy-user-functions" || exit 1
+
 PROG="omarchy user groups"
 ASSUME_YES=0
 USERNAME=""
@@ -45,7 +47,7 @@ confirm() {
 }
 
 need_gum() {
-  command -v gum >/dev/null 2>&1 || fail "gum is required for the interactive menu"
+  omarchy-cmd-present gum || fail "gum is required for the interactive menu"
 }
 
 login_users() {
@@ -208,50 +210,8 @@ else
   final=$(printf '%s' "$selected" | tr '\n' ',' | sed 's/,$//')
 fi
 
-# Get the real user (the invoker) UID and username
-real_user_uid=$(id -u ${SUDO_USER:-$USER})
-real_user_name=${SUDO_USER:-$USER}
-
-# Get the target user's UID
-target_user_uid=$(id -u "$USERNAME")
-
-# Check if we are trying to remove wheel from the real user
-if [[ $target_user_uid -eq $real_user_uid ]] && [[ "$final" != *wheel* ]]; then
-  fail "refusing to remove wheel from your own account"
-fi
-
-# Check if we are about to remove the last login user from the wheel group
-# We only care if we are removing wheel from a user who is currently in the wheel group.
-# Determine if the target user is currently in the wheel group
-current_has_wheel=false
-if [[ "$current" == *wheel* ]]; then
-  current_has_wheel=true
-fi
-# Determine if the final groups include wheel
-final_has_wheel=false
-if [[ "$final" == *wheel* ]]; then
-  final_has_wheel=true
-fi
-
-# If we are removing wheel from the target user (i.e., they currently have it and after the change they don't)
-if [[ $current_has_wheel == true && $final_has_wheel == false ]]; then
-  # Count the current number of login users in the wheel group
-  wheel_users_string=$(getent group wheel | cut -d: -f4)
-  if [[ -n $wheel_users_string ]]; then
-    IFS=',' read -ra wheel_users <<<"$wheel_users_string"
-    current_login_count=0
-    for u in "${wheel_users[@]}"; do
-      uid=$(id -u "$u" 2>/dev/null) || continue
-      if ((uid >= 1000 && uid < 60000)); then
-        ((current_login_count++))
-      fi
-    done
-    # If the target user is a login user (which they are, because we checked UID range earlier) and they are in the wheel group, then they are counted in current_login_count.
-    # After removing them, the count would be current_login_count - 1.
-    if ((current_login_count <= 1)); then
-      fail "refusing to remove wheel: would leave the wheel group with no login users"
-    fi
-  fi
+if in_group "$USERNAME" wheel && [[ ,$final, != *,wheel,* ]]; then
+  guard_wheel_removal "$USERNAME"
 fi
 
 echo
