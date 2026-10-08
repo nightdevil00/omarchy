@@ -149,8 +149,14 @@ Rectangle {
       }
 
       Item {
+        id: entryBox
         width: entry.width
         height: entry.height
+
+        // Shared password-field geometry so the bullet row and the caret stay
+        // locked to the same advance: a 7px bullet plus the row's 5px spacing.
+        property int bulletW: 7
+        property bool caretBlink: true
 
         Image {
           id: entry
@@ -171,6 +177,7 @@ Rectangle {
         }
 
         Row {
+          id: bulletRow
           anchors.left: parent.left
           anchors.leftMargin: 20
           anchors.verticalCenter: parent.verticalCenter
@@ -181,8 +188,8 @@ Rectangle {
 
             Image {
               source: "bullet.png"
-              width: 7
-              height: 7
+              width: entryBox.bulletW
+              height: entryBox.bulletW
             }
           }
         }
@@ -202,11 +209,17 @@ Rectangle {
           selectionColor: "transparent"
           selectedTextColor: "transparent"
           activeFocusOnPress: true
-          cursorVisible: true
-          cursorDelegate: Item { }
+          // Native caret hidden: its font metrics differ from the bullet
+          // advance, so it drifts from the visible bullets. A caret aligned
+          // to the bullet row is drawn below instead.
+          cursorVisible: false
           focus: true
 
-          onTextChanged: root.loginFailed = false
+          onTextChanged: {
+            root.loginFailed = false
+            entryBox.caretBlink = true
+            caretBlinkTimer.restart()
+          }
 
           Keys.onPressed: {
             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
@@ -230,6 +243,29 @@ Rectangle {
               event.accepted = true
             }
           }
+        }
+
+        // Password caret, drawn aligned to the bullet row. The native
+        // TextInput caret is hidden above (its 24px/5px metrics drift from the
+        // 12px bullet advance); this uses cursorPosition on the same 12px step
+        // as the bullets and blinks while the field has focus.
+        Rectangle {
+          id: caret
+          width: 2
+          height: entryBox.bulletW
+          color: "#7aa2f7"
+          anchors.verticalCenter: parent.verticalCenter
+          x: Math.min(bulletRow.x + password.cursorPosition * (entryBox.bulletW + bulletRow.spacing),
+                      parent.width - width - 4)
+          visible: password.activeFocus
+          opacity: entryBox.caretBlink ? 1 : 0
+        }
+        Timer {
+          id: caretBlinkTimer
+          interval: 530
+          running: password.activeFocus
+          repeat: true
+          onTriggered: entryBox.caretBlink = !entryBox.caretBlink
         }
       }
     }
