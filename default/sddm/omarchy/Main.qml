@@ -330,7 +330,7 @@ Rectangle {
             }
           }
           Keys.onReleased: {
-            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Renter) {
+            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
               doLogin()
               event.accepted = true
             }
