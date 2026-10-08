@@ -51,7 +51,7 @@ case ${1:-} in
     found=0
     for entry in "${USERS[@]}"; do
       IFS=: read -r name uid _ _ <<<"$entry"
-      if [[ -z ${2:-} || $2 == "$name" ]]; then
+      if [[ -z ${2:-} || $2 == "$name" || $2 == "$uid" ]]; then
         echo "$name:x:$uid:$uid::/home/$name:/bin/bash"
         found=1
       fi
@@ -160,3 +160,18 @@ expect_refused "user remove refuses the caller's own account" "$fixture_admins" 
 
 expect_refused "user remove refuses to continue without confirmation" "$fixture_admins" \
   "refusing to continue without confirmation" omarchy-user-remove bob --keep-home
+
+# Safety-check coverage: system accounts and self-removal by numeric UID are
+# refused before any privileged command runs.
+fixture_remove_safety="$test_tmp/remove-safety.sh"
+cat >"$fixture_remove_safety" <<'FIXTURE'
+USERS=("alice:1000:alice:wheel video" "sysacct:500:sysacct:")
+FAKE_GROUPS=("wheel:alice" "video:alice" "audio:")
+FAKE_CURRENT=alice
+FIXTURE
+
+expect_refused "user remove refuses system accounts" "$fixture_remove_safety" \
+  "system account" omarchy-user-remove sysacct --keep-home --yes
+
+expect_refused "user remove blocks removing yourself by numeric UID" "$fixture_remove_safety" \
+  "your own account" omarchy-user-remove 1000 --keep-home --yes
